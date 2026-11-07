@@ -162,7 +162,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       ),
                       trailing: MoneyText(
                         (t['type'] == 'expense' ? -1 : 1) *
-                            ((t['amount'] as num?)?.toInt() ?? 0),
+                            ((t['amount_minor'] as num?)?.toInt() ?? 0),
                         signed: true,
                       ),
                       onTap: () => context.go('/transactions/${t['id']}'),
@@ -258,7 +258,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         child: Text('Transaksi tidak ditemukan.'),
       );
     }
-    final amount = (tx['amount'] as num?)?.toInt() ?? 0;
+    final amount = (tx['amount_minor'] as num?)?.toInt() ?? 0;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.s16),
       child: Column(
@@ -423,7 +423,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final ex = widget.existing;
     if (ex != null) {
       _type = (ex['type'] as String?) ?? 'expense';
-      _amountCtrl.text = '${(ex['amount'] as num?)?.toInt() ?? 0}';
+      _amountCtrl.text = '${(ex['amount_minor'] as num?)?.toInt() ?? 0}';
       _merchantCtrl.text = (ex['merchant'] as String?) ?? '';
       _descCtrl.text = (ex['description'] as String?) ?? '';
       _accountId = ex['account_id'] as String?;
@@ -474,7 +474,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           widget.existing!['id'] as String,
           {
             'type': _type,
-            'amount': amount,
+            'amount_minor': amount,
             'account_id': _accountId,
             'destination_account_id': _destAccountId,
             'category_id': _type == 'transfer' ? null : _categoryId,

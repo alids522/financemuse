@@ -6,10 +6,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// The anon key is never stored in the repo, never printed, and never
 /// committed — it is passed only at build/run time.
 ///
-/// IMPORTANT (pending decision): the `financemuse` Postgres schema is NOT
-/// yet exposed via PostgREST (PGRST_DB_SCHEMAS). Until exposure is decided,
-/// every query against `.schema('financemuse')` fails at runtime. The app
-/// implements the service layer properly and surfaces a clear in-app notice
+/// The `financemuse` Postgres schema IS exposed via PostgREST
+/// (PGRST_DB_SCHEMAS includes financemuse since 2026-11-07). Anon has
+/// USAGE only, so unauthenticated calls fail; signed-in users work under
+/// owner-only RLS. The app surfaces a clear in-app notice on failure
 /// instead of faking data — see [SupabaseFailure.isSchemaNotExposed].
 class SupabaseConfig {
   static const String url = String.fromEnvironment(

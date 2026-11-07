@@ -6,8 +6,9 @@ import 'supabase_client.dart';
 /// - Signup: username 3–24 [a-z0-9_], email, password min 8 + confirm.
 ///   No email confirmation; session starts immediately; a `profiles` row is
 ///   created with username_normalized = lowercase.
-/// - Login: username-or-email. Username is resolved to an email via a query
-///   on financemuse.profiles; errors are always generic.
+/// - Login: username-or-email. Bare usernames are resolved to an email
+///   server-side by the `financemuse-login` Edge Function; errors are
+///   always generic.
 /// - Suspended profiles are signed out and denied generically.
 /// - No self-service forgot/reset in v1; admin-assisted reset lives in Admin.
 class AuthService {
@@ -56,9 +57,11 @@ class AuthService {
       if (user == null) {
         throw SupabaseFailure('Pendaftaran gagal. Coba lagi.');
       }
-      // Create the profile row (PRD §5.1, §10 profiles).
+      // Create the profile row (PRD §5.1, §10 profiles). `username` is
+      // NOT NULL and must equal username_normalized (lowercase).
       await _client.table('profiles').insert({
         'user_id': user.id,
+        'username': normalized,
         'username_normalized': normalized,
         'display_name': normalized,
         'base_currency': 'IDR',
@@ -73,39 +76,41 @@ class AuthService {
   }
 
   /// Login with username or email. Generic error on any failure.
+  /// Bare usernames are resolved to an email server-side by the
+  /// `financemuse-login` Edge Function (financemuse.resolve_login_email);
+  /// the email is never returned to the client and never queried from
+  /// the app. Email logins go through the same function so every failure
+  /// — unknown username, unknown email, wrong password — is an identical
+  /// generic 401 with no enumeration leak.
   Future<void> signIn({required String login, required String password}) async {
     final input = login.trim();
     try {
-      String email = input;
-      if (!input.contains('@')) {
-        // Resolve username -> email via profiles (server-owned lookup).
-        final rows = await _client
-            .table('profiles')
-            .select('user_id')
-            .eq('username_normalized', input.toLowerCase())
-            .limit(1);
-        if (rows.isEmpty) {
-          throw SupabaseFailure('Email atau kata sandi salah.');
-        }
-        // Email itself lives in Supabase Auth, not in profiles. The
-        // username->email resolution must happen server-side; until the
-        // backend lookup exists we cannot sign in by bare username.
-        // We therefore fail generically here rather than guessing an email.
-        throw SupabaseFailure(
-          'Login dengan username memerlukan layanan resolusi email '
-          'di server (belum tersedia). Gunakan email untuk masuk.',
-        );
-      }
-      final res = await _client.auth.signInWithPassword(
-        email: email,
-        password: password,
+      final res = await _client.functions.invoke(
+        'financemuse-login',
+        body: {'identifier': input, 'password': password},
       );
-      if (res.user == null) {
+      final data = res.data;
+      if (data is! Map<String, dynamic>) {
         throw SupabaseFailure('Email atau kata sandi salah.');
       }
-      await _assertNotSuspended(res.user!.id);
+      final accessToken = data['access_token'] as String?;
+      final refreshToken = data['refresh_token'] as String?;
+      if (accessToken == null || refreshToken == null) {
+        throw SupabaseFailure('Email atau kata sandi salah.');
+      }
+      // gotrue 2.x: refresh token is positional, access token named.
+      final session = await _client.auth.setSession(refreshToken, accessToken: accessToken);
+      final user = session.user;
+      if (user == null) {
+        throw SupabaseFailure('Email atau kata sandi salah.');
+      }
+      await _assertNotSuspended(user.id);
     } on SupabaseFailure {
       rethrow;
+    } on FunctionException {
+      // Edge Function returned 4xx (unknown user / wrong password) or
+      // 5xx — either way the login failed; stay generic, no enumeration.
+      throw SupabaseFailure('Email atau kata sandi salah.');
     } catch (e) {
       throw mapSupabaseError(e);
     }
@@ -125,9 +130,9 @@ class AuthService {
     } on SupabaseFailure {
       rethrow;
     } catch (_) {
-      // If profiles cannot be read (schema not exposed yet), do not block
-      // login on a check we cannot perform — the server must enforce
-      // suspension (PRD §5.1: status dipastikan server-side).
+      // If profiles cannot be read, do not block login on a check we
+      // cannot perform — the server must enforce suspension (PRD §5.1:
+      // status dipastikan server-side).
     }
   }
 

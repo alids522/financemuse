@@ -4,8 +4,9 @@ import '../services/supabase_client.dart';
 import '../theme/app_theme.dart';
 import '../utils/money_period.dart';
 
-/// Notice shown when the financemuse schema is not exposed via PostgREST
-/// yet. Data is never faked — screens show this instead of empty data.
+/// Notice shown when data cannot be loaded from the server (e.g. the
+/// API is unreachable or the session expired). Data is never faked —
+/// screens show this instead of empty data.
 class SchemaNotice extends StatelessWidget {
   const SchemaNotice({super.key, this.failure});
   final SupabaseFailure? failure;
@@ -35,9 +36,8 @@ class SchemaNotice extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.s8),
             const Text(
-              'Skema financemuse belum diekspos melalui PostgREST API. '
-              'Layanan data sudah terimplementasi, tetapi panggilan API '
-              'gagal sampai eksposur skema diputuskan di server. '
+              'Panggilan API ke skema financemuse gagal (mis. belum masuk, '
+              'sesi kedaluwarsa, atau server tidak terjangkau). '
               'Tidak ada data contoh yang ditampilkan.',
             ),
             if (failure != null) ...[

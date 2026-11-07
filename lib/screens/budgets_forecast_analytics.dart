@@ -186,7 +186,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
             for (final b in _budgets)
               _BudgetCard(
                 name: (b['name'] as String?) ?? 'Budget',
-                budget: (b['amount'] as num?)?.toInt() ?? 0,
+                budget: (b['amount_minor'] as num?)?.toInt() ?? 0,
                 actual: _actual[b['id'] as String] ?? 0,
                 forecast: _forecast[b['id'] as String],
               ),
@@ -315,7 +315,7 @@ class _ForecastScreenState extends State<ForecastScreen> {
       final budgets = await state.finance.listBudgets();
       var budgetTotal = 0;
       for (final b in budgets) {
-        budgetTotal += (b['amount'] as num?)?.toInt() ?? 0;
+        budgetTotal += (b['amount_minor'] as num?)?.toInt() ?? 0;
       }
       if (mounted) {
         setState(() {
@@ -533,7 +533,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         if (r['type'] != 'expense' || r['status'] != 'posted') continue;
         final key = names[r['category_id'] as String?] ?? 'Tanpa kategori';
         byCat[key] = (byCat[key] ?? 0) +
-            ((r['amount'] as num?)?.toInt() ?? 0);
+            ((r['amount_minor'] as num?)?.toInt() ?? 0);
       }
       if (mounted) {
         setState(() {

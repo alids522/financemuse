@@ -51,14 +51,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       var balance = 0;
       for (final a in accounts) {
-        balance += (a['opening_balance'] as num?)?.toInt() ?? 0;
+        balance += (a['opening_balance_minor'] as num?)?.toInt() ?? 0;
       }
       // Apply posted transactions to opening balances (client-side
       // computation; journal ledger is authoritative — see README).
       final all = await state.finance.listTransactions(limit: 1000);
       for (final t in all) {
         if (t['status'] != 'posted') continue;
-        final amount = (t['amount'] as num?)?.toInt() ?? 0;
+        final amount = (t['amount_minor'] as num?)?.toInt() ?? 0;
         if (t['type'] == 'income') balance += amount;
         if (t['type'] == 'expense') balance -= amount;
       }
@@ -264,7 +264,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           for (final b in _budgets.take(5))
                             _BudgetRow(
                               name: (b['name'] as String?) ?? 'Budget',
-                              budget: (b['amount'] as num?)?.toInt() ?? 0,
+                              budget: (b['amount_minor'] as num?)?.toInt() ?? 0,
                               actual: _budgetActual[b['id'] as String] ?? 0,
                             ),
                           TextButton(
@@ -312,7 +312,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           (t['type'] == 'expense'
                                   ? -1
                                   : 1) *
-                              ((t['amount'] as num?)?.toInt() ?? 0),
+                              ((t['amount_minor'] as num?)?.toInt() ?? 0),
                           signed: true,
                         ),
                         onTap: () =>

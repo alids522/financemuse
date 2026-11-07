@@ -78,7 +78,7 @@ class PdfExport {
                           (t['merchant'] as String?) ??
                           '',
                       (t['category_name'] as String?) ?? '',
-                      Money.formatIdr((t['amount'] as num?)?.toInt() ?? 0),
+                      Money.formatIdr((t['amount_minor'] as num?)?.toInt() ?? 0),
                     ])
                 .toList(),
           ),

@@ -6,10 +6,11 @@ import 'supabase_client.dart';
 /// Data layer for all Finance Tracker tables (PRD §10), via the Supabase
 /// client on schema `financemuse`.
 ///
-/// NOTE: PostgREST does not expose the `financemuse` schema yet, so these
-/// calls fail at runtime until exposure is decided. Every screen catches
-/// [SupabaseFailure] and shows an in-app notice — data is never faked and
-/// there is no silent fallback to mock data.
+/// NOTE: PostgREST exposes the `financemuse` schema (PGRST_DB_SCHEMAS
+/// includes financemuse since 2026-11-07); anon has USAGE only, so all
+/// calls below run as the signed-in user under owner-only RLS. Every
+/// screen catches [SupabaseFailure] and shows an in-app notice — data is
+/// never faked and there is no silent fallback to mock data.
 class FinanceService {
   FinanceService(this._client);
   final SupabaseClient _client;
@@ -42,7 +43,7 @@ class FinanceService {
         'name': name,
         'type': type,
         'currency': currency,
-        'opening_balance': openingBalanceMinor,
+        'opening_balance_minor': openingBalanceMinor,
         'status': 'active',
       });
     } catch (e) {
@@ -151,6 +152,8 @@ class FinanceService {
     }
     final key = idempotencyKey ?? newIdempotencyKey();
     try {
+      // NOTE: transactions has NO `tags` column — tags live in the
+      // tags + transaction_tags tables and are linked below.
       final inserted = await _client.table('transactions').insert({
         'user_id': _userId,
         'type': type,
@@ -159,11 +162,10 @@ class FinanceService {
         'destination_account_id': destinationAccountId,
         'category_id': categoryId,
         'effective_at': effectiveAtUtc.toIso8601String(),
-        'amount': amountMinor,
+        'amount_minor': amountMinor,
         'currency': currency,
         'merchant': merchant,
         'description': description,
-        'tags': tags,
         'idempotency_key': key,
       }).select().single();
       if (splits.isNotEmpty) {
@@ -171,14 +173,47 @@ class FinanceService {
             .map((s) => {
                   'transaction_id': inserted['id'],
                   'category_id': s['category_id'],
-                  'amount': s['amount'],
+                  'amount_minor': s['amount'],
                 })
             .toList());
+      }
+      for (final tag in tags) {
+        await _linkTag(inserted['id'] as String, tag);
       }
       return Map<String, dynamic>.from(inserted);
     } catch (e) {
       throw mapSupabaseError(e);
     }
+  }
+
+  /// Link one tag name to a transaction: reuse the user's existing tag
+  /// row (case-insensitive, per the unique index on lower(name)) or
+  /// create it, then insert the transaction_tags link.
+  Future<void> _linkTag(String transactionId, String name) async {
+    final tag = name.trim();
+    if (tag.isEmpty) return;
+    final pattern =
+        tag.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+    final existing = await _client
+        .table('tags')
+        .select('id')
+        .eq('user_id', _userId)
+        .ilike('name', pattern)
+        .limit(1);
+    String tagId;
+    if (existing.isEmpty) {
+      final ins = await _client.table('tags').insert({
+        'user_id': _userId,
+        'name': tag,
+      }).select('id').single();
+      tagId = ins['id'] as String;
+    } else {
+      tagId = existing.first['id'] as String;
+    }
+    await _client.table('transaction_tags').insert({
+      'transaction_id': transactionId,
+      'tag_id': tagId,
+    });
   }
 
   Future<void> updateTransaction(String id, Map<String, dynamic> patch,
@@ -198,7 +233,7 @@ class FinanceService {
       Map<String, dynamic> original) async {
     return createTransaction(
       type: original['type'] as String,
-      amountMinor: original['amount'] as int,
+      amountMinor: original['amount_minor'] as int,
       currency: (original['currency'] as String?) ?? 'IDR',
       accountId: original['account_id'] as String,
       destinationAccountId: original['destination_account_id'] as String?,
@@ -215,7 +250,7 @@ class FinanceService {
       Map<String, dynamic> original, String reason) async {
     final reversed = await createTransaction(
       type: original['type'] as String,
-      amountMinor: original['amount'] as int,
+      amountMinor: original['amount_minor'] as int,
       currency: (original['currency'] as String?) ?? 'IDR',
       accountId: original['account_id'] as String,
       destinationAccountId: original['destination_account_id'] as String?,
@@ -246,7 +281,7 @@ class FinanceService {
     var expense = 0;
     for (final r in rows) {
       if (r['status'] != 'posted') continue;
-      final amount = (r['amount'] as num?)?.toInt() ?? 0;
+      final amount = (r['amount_minor'] as num?)?.toInt() ?? 0;
       switch (r['type']) {
         case 'income':
           income += amount;
@@ -265,7 +300,7 @@ class FinanceService {
           .table('categories')
           .select()
           .or('user_id.eq.$_userId,user_id.is.null')
-          .order('order');
+          .order('sort_order');
       return List<Map<String, dynamic>>.from(rows);
     } catch (e) {
       throw mapSupabaseError(e);
@@ -331,6 +366,7 @@ class FinanceService {
 
   Future<void> createTemplate({
     required String name,
+    required String type, // expense | income | transfer | adjustment (NOT NULL)
     required Map<String, dynamic> payload,
     bool favourite = false,
   }) async {
@@ -338,6 +374,7 @@ class FinanceService {
       await _client.table('transaction_templates').insert({
         'user_id': _userId,
         'name': name,
+        'type': type,
         'payload_json': payload,
         'favourite': favourite,
         'sort_order': 0,
@@ -381,10 +418,10 @@ class FinanceService {
         'user_id': _userId,
         'name': name,
         'category_id': categoryId,
-        'amount': amountMinor,
+        'amount_minor': amountMinor,
         'currency': currency,
         'cadence': cadence,
-        'rollover': false,
+        'rollover': 'none',
       });
     } catch (e) {
       throw mapSupabaseError(e);
@@ -398,7 +435,7 @@ class FinanceService {
     var total = 0;
     for (final r in rows) {
       if (r['status'] == 'posted') {
-        total += (r['amount'] as num?)?.toInt() ?? 0;
+        total += (r['amount_minor'] as num?)?.toInt() ?? 0;
       }
     }
     return total;
@@ -427,7 +464,7 @@ class FinanceService {
       await _client.table('savings_goals').insert({
         'user_id': _userId,
         'name': name,
-        'target_amount': targetMinor,
+        'target_amount_minor': targetMinor,
         'target_date': targetDate?.toIso8601String(),
       });
     } catch (e) {
@@ -441,7 +478,7 @@ class FinanceService {
           .table('debts')
           .select()
           .eq('user_id', _userId)
-          .order('due');
+          .order('due_date');
       return List<Map<String, dynamic>>.from(rows);
     } catch (e) {
       throw mapSupabaseError(e);
@@ -449,17 +486,18 @@ class FinanceService {
   }
 
   Future<void> createDebt({
-    required String name,
+    required String counterparty,
     required int principalMinor,
     DateTime? due,
     String kind = 'debt',
   }) async {
     try {
+      // debts has no `name` column — the UI label maps to `counterparty`.
       await _client.table('debts').insert({
         'user_id': _userId,
-        'name': name,
-        'principal': principalMinor,
-        'due': due?.toIso8601String(),
+        'counterparty': counterparty,
+        'principal_minor': principalMinor,
+        'due_date': due?.toIso8601String(),
         'kind': kind,
       });
     } catch (e) {
@@ -485,14 +523,17 @@ class FinanceService {
     required String name,
     required String cadence,
     required Map<String, dynamic> payload,
+    String type = 'expense', // expense | income | transfer (NOT NULL)
     DateTime? nextAt,
   }) async {
     try {
+      // recurring_rules has no `name` column — the UI name is stored
+      // inside payload_json; `type` is NOT NULL in the table.
       await _client.table('recurring_rules').insert({
         'user_id': _userId,
-        'name': name,
         'cadence': cadence,
-        'payload_json': payload,
+        'type': type,
+        'payload_json': {'name': name, ...payload},
         'mode': 'draft',
         'active': true,
         'next_at': nextAt?.toIso8601String(),
@@ -589,7 +630,7 @@ class FinanceService {
       final rows = await _client
           .table('admin_audit_logs')
           .select()
-          .order('timestamp', ascending: false)
+          .order('created_at', ascending: false)
           .limit(200);
       return List<Map<String, dynamic>>.from(rows);
     } catch (e) {
@@ -608,7 +649,6 @@ class FinanceService {
       'action': action,
       'reason': reason,
       'result': 'ok',
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
     });
   }
 

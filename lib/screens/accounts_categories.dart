@@ -53,7 +53,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
     final nameCtrl =
         TextEditingController(text: (existing?['name'] as String?) ?? '');
     final balanceCtrl = TextEditingController(
-        text: '${(existing?['opening_balance'] as num?)?.toInt() ?? 0}');
+        text: '${(existing?['opening_balance_minor'] as num?)?.toInt() ?? 0}');
     String type = (existing?['type'] as String?) ?? 'Cash';
     final ok = await showDialog<bool>(
       context: context,
@@ -171,7 +171,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                       subtitle: Text(
                           '${a['type']} • ${a['status'] ?? 'active'}'),
                       trailing: MoneyText(
-                          (a['opening_balance'] as num?)?.toInt() ?? 0),
+                          (a['opening_balance_minor'] as num?)?.toInt() ?? 0),
                       onTap: () => _showForm(existing: a),
                     ),
                 ],

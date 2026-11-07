@@ -27,10 +27,24 @@ class CsvService {
     'source_ref',
   ];
 
+  /// DB rows use the migration's column names (PRD §10 minor units);
+  /// map them onto the canonical CSV headers. A row that already uses a
+  /// canonical header key (e.g. from a test) keeps working via fallback.
+  static const Map<String, String> _dbKeyForHeader = {
+    'transaction_id': 'id',
+    'date_time': 'effective_at',
+    'amount': 'amount_minor',
+    'account': 'account_id',
+    'destination_account': 'destination_account_id',
+    'category': 'category_id',
+  };
+
   static String exportRows(List<Map<String, dynamic>> rows) {
     final data = <List<dynamic>>[
       headers,
-      ...rows.map((r) => headers.map((h) => r[h] ?? '').toList()),
+      ...rows.map((r) => headers
+          .map((h) => r[_dbKeyForHeader[h]] ?? r[h] ?? '')
+          .toList()),
     ];
     return const ListToCsvConverter().convert(data);
   }

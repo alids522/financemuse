@@ -114,7 +114,7 @@ class _SavingsScreenState extends State<SavingsScreen> {
           .map((g) => ListTile(
                 title: Text((g['name'] as String?) ?? ''),
                 subtitle: Text(
-                    'Target: ${Money.formatIdr((g['target_amount'] as num?)?.toInt() ?? 0)}'),
+                    'Target: ${Money.formatIdr((g['target_amount_minor'] as num?)?.toInt() ?? 0)}'),
               ))
           .toList(),
     );
@@ -212,7 +212,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
               }
               try {
                 await AppState.instance.finance.createDebt(
-                    name: nameCtrl.text,
+                    counterparty: nameCtrl.text,
                     principalMinor: principal,
                     kind: kind);
                 if (ctx.mounted) Navigator.of(ctx).pop(true);
@@ -242,9 +242,9 @@ class _DebtsScreenState extends State<DebtsScreen> {
       note: 'TODO (P1): jadwal cicilan, pembayaran parsial, dan pemisah bunga/pokok.',
       items: _debts
           .map((d) => ListTile(
-                title: Text((d['name'] as String?) ?? ''),
+                title: Text((d['counterparty'] as String?) ?? ''),
                 subtitle: Text(
-                    '${d['kind'] ?? 'debt'} • Pokok: ${Money.formatIdr((d['principal'] as num?)?.toInt() ?? 0)}'),
+                    '${d['kind'] ?? 'debt'} • Pokok: ${Money.formatIdr((d['principal_minor'] as num?)?.toInt() ?? 0)}'),
               ))
           .toList(),
     );
@@ -361,7 +361,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
       note: 'TODO (P1): eksekusi otomatis (mode scheduled/draft/auto-post) dan job idempotent di backend.',
       items: _rules
           .map((r) => ListTile(
-                title: Text((r['name'] as String?) ?? ''),
+                title: Text(((r['payload_json'] as Map<String, dynamic>?)?['name'] as String?) ?? 'Aturan'),
                 subtitle: Text(
                     '${r['cadence']} • mode: ${r['mode'] ?? 'draft'} • aktif: ${r['active'] == true ? 'ya' : 'tidak'}'),
               ))

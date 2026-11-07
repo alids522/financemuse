@@ -324,6 +324,27 @@ void main() {
       expect(parsed.errors.length, 1);
     });
 
+    test('export maps DB-shaped rows (amount_minor, effective_at) to CSV headers', () {
+      final csv = CsvService.exportRows([
+        {
+          'id': 'db-row-1',
+          'effective_at': '2026-11-07T10:00:00+07:00',
+          'type': 'expense',
+          'amount_minor': 35000,
+          'currency': 'IDR',
+          'account_id': 'acc-1',
+          'category_id': 'cat-1',
+          'description': 'Makan siang',
+        }
+      ]);
+      final lines = csv.split('\n');
+      expect(lines.first, contains('transaction_id'));
+      expect(lines[1], contains('db-row-1'));
+      expect(lines[1], contains('2026-11-07'));
+      expect(lines[1], contains('35000'));
+      expect(lines[1], contains('acc-1'));
+    });
+
     test('export round-trips headers', () {
       final csv = CsvService.exportRows([
         {
