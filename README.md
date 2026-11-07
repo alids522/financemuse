@@ -74,16 +74,52 @@ flutter build web --release \
 Periksa dulu nama kunci sebenarnya di file tersebut (hanya nama kunci,
 jangan pernah menampilkan nilainya).
 
-## PostgREST: skema financemuse belum diekspos (keputusan pending)
+## PostgREST: skema financemuse SUDAH diekspos (2026-11-07)
 
 Seluruh data layer (`lib/services/finance_service.dart`) memanggil Supabase
 client pada skema `financemuse` (`.schema('financemuse').from(...)`) sesuai
-tabel PRD §10. Sampai skema tersebut diekspos via PostgREST
-(`PGRST_DB_SCHEMAS`), panggilan API gagal saat runtime. Aplikasi
-menangani ini dengan jujur: setiap layar menampilkan pemberitahuan
-"Skema financemuse belum diekspos" beserta detail teknis — **tidak ada
-data contoh dan tidak ada fallback mock diam-diam**. Begitu eksposur
-diputuskan, tidak ada perubahan kode aplikasi yang diperlukan.
+tabel PRD §10. Skema ini sudah diekspos via PostgREST:
+
+- Dulu: `PGRST_DB_SCHEMAS=public,storage,graphql_public,waclonegem`
+- Kini: `PGRST_DB_SCHEMAS=public,storage,graphql_public,waclonegem,financemuse`
+  (backup `.env` lama: `/root/supabase-project/backups/.env.bak-20261107-financemuse`;
+  container `supabase-rest` dibuat ulang, cache PostgREST 84 relasi)
+- `private` tetap TIDAK diekspos.
+- Grants: `anon` hanya USAGE pada skema (tanpa grant tabel apa pun —
+  panggilan anon ke tabel mengembalikan 401/42501); `authenticated` punya
+  SELECT/INSERT/UPDATE/DELETE pada 35 objek financemuse.
+- RLS aktif di semua 34 tabel, kebijakan owner-only (`auth.uid() =
+  user_id`); kategori sistem (`user_id` NULL) bisa dibaca semua user
+  yang login; tabel anak (splits, tags, dsb.) lewat kebijakan parent.
+- OAuth direct Data API tetap TERTUTUP sesuai PRD §6.5 — akses data hanya
+  lewat client Supabase dengan JWT user (atau service-role di backend).
+
+Aplikasi menangani kegagalan API dengan jujur: setiap layar menampilkan
+pemberitahuan beserta detail teknis — **tidak ada data contoh dan tidak
+ada fallback mock diam-diam**.
+
+### Batasan yang masih berlaku
+
+1. **Pendaftaran user baru DIBLOKIR** oleh trigger instance-wide
+   `private.on_signup` pada `auth.users` (500 P0001 "Registration is
+   invitation only") — berlaku untuk semua signup, termasuk pembuatan
+   lewat Auth Admin API. Trigger ini TIDAK diubah/dinonaktifkan oleh
+   proyek ini dan skema adoetz (`private`/`public`) tidak disentuh.
+   User financemuse baru belum bisa mendaftar sampai Adoetz memutuskan
+   soal trigger tersebut. Login username di bawah ini hanya membantu
+   user yang SUDAH ada.
+2. **Login username-only** kini bekerja untuk user yang sudah ada, lewat
+   Edge Function `financemuse-login` (`POST /functions/v1/financemuse-login`
+   dengan `{identifier, password}`) + RPC `financemuse.resolve_login_email`
+   (SECURITY DEFINER, hanya `service_role` yang boleh mengeksekusi;
+   migrasi `supabase/migrations/20261107220000_financemuse_login_rpc.sql`).
+   Fungsi ini tidak pernah mengembalikan email ke client dan selalu
+   membalas 401 generik yang identik untuk username tak dikenal, akun
+   suspended, maupun kata sandi salah. Aplikasi memanggilnya dari
+   `AuthService.signIn` lalu memasang sesi lewat `auth.setSession`.
+   Verifikasi end-to-end jalur sukses (kata sandi benar) masih menunggu
+   kata sandi akun uji / pengujian oleh Adoetz — jalur gagal sudah
+   terverifikasi identik dan bebas bocor email.
 
 Saldo otoritatif berasal dari journal ledger (PRD §9.3). Sampai view/fungsi
 saldo tersedia, dashboard menghitung saldo dari saldo awal + transaksi
