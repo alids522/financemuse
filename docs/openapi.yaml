@@ -1,0 +1,307 @@
+openapi: 3.1.0
+info:
+  title: Finance Tracker API
+  version: 1.0.0
+  description: |
+    REST API outline per PRD §11. Base route /api/v1, bearer auth,
+    Idempotency-Key on mutations, UTC ISO 8601 timestamps, monetary amounts
+    as minor-unit integers (IDR), cursor pagination, standardized errors
+    {code, message, request_id, details?}. This is a contract stub for P0;
+    no live server is implemented in this pass.
+servers:
+  - url: https://supabase.adoetz52.my.id/api/v1
+    description: Self-hosted Supabase (placeholder base; service layer TBD)
+tags:
+  - name: Accounts
+  - name: Transactions
+  - name: Categories
+  - name: Templates
+  - name: Budgets
+  - name: Analytics
+  - name: Forecast
+  - name: Import
+  - name: Export
+  - name: Agents
+  - name: Approvals
+  - name: Audit
+  - name: Admin
+paths:
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: List accounts
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Accounts]
+      summary: Create account
+      responses:
+        '201': { description: Created }
+  /accounts/{id}:
+    patch:
+      tags: [Accounts]
+      summary: Update account
+      responses:
+        '200': { description: OK }
+  /transactions:
+    get:
+      tags: [Transactions]
+      summary: List transactions (filters: period, type, account, category, tag, search; cursor pagination)
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Transactions]
+      summary: Create transaction (Idempotency-Key required)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, amount_minor, currency, account_id, effective_at]
+              properties:
+                type: { type: string, enum: [expense, income, transfer, adjustment] }
+                amount_minor: { type: integer, minimum: 1 }
+                currency: { type: string, example: IDR }
+                account_id: { type: string, format: uuid }
+                destination_account_id: { type: string, format: uuid }
+                category_id: { type: string, format: uuid }
+                effective_at: { type: string, format: date-time }
+                description: { type: string }
+      responses:
+        '201': { description: Created }
+  /transactions/{id}:
+    get:
+      tags: [Transactions]
+      summary: Get one transaction
+      responses:
+        '200': { description: OK }
+    patch:
+      tags: [Transactions]
+      summary: Update transaction (expected_version for optimistic concurrency)
+      responses:
+        '200': { description: OK }
+  /transfers:
+    post:
+      tags: [Transactions]
+      summary: Atomic internal transfer
+      responses:
+        '201': { description: Created }
+  /categories:
+    get:
+      tags: [Categories]
+      summary: List categories (system + own)
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Categories]
+      summary: Create category
+      responses:
+        '201': { description: Created }
+  /categories/{id}:
+    patch:
+      tags: [Categories]
+      summary: Update category
+      responses:
+        '200': { description: OK }
+  /transaction-templates:
+    get:
+      tags: [Templates]
+      summary: List templates
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Templates]
+      summary: Create template
+      responses:
+        '201': { description: Created }
+  /transaction-templates/{id}:
+    patch:
+      tags: [Templates]
+      summary: Update template
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [Templates]
+      summary: Delete template
+      responses:
+        '204': { description: No content }
+  /budgets:
+    get:
+      tags: [Budgets]
+      summary: List budgets
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Budgets]
+      summary: Create budget
+      responses:
+        '201': { description: Created }
+  /budgets/{id}:
+    patch:
+      tags: [Budgets]
+      summary: Update budget
+      responses:
+        '200': { description: OK }
+  /analytics/summary:
+    get:
+      tags: [Analytics]
+      summary: Income/expense/net summary for a period
+      responses:
+        '200': { description: OK }
+  /analytics/categories:
+    get:
+      tags: [Analytics]
+      summary: Expense breakdown by category
+      responses:
+        '200': { description: OK }
+  /analytics/cashflow:
+    get:
+      tags: [Analytics]
+      summary: Cashflow series
+      responses:
+        '200': { description: OK }
+  /forecasts:
+    get:
+      tags: [Forecast]
+      summary: Get forecast runs for a period
+      responses:
+        '200': { description: OK }
+  /forecasts/simulate:
+    post:
+      tags: [Forecast]
+      summary: What-if simulation (never mutates data)
+      responses:
+        '200': { description: OK }
+  /imports:
+    post:
+      tags: [Import]
+      summary: Start import job (CSV/PDF)
+      responses:
+        '202': { description: Accepted }
+  /imports/{id}:
+    get:
+      tags: [Import]
+      summary: Import job status
+      responses:
+        '200': { description: OK }
+  /imports/{id}/confirm:
+    post:
+      tags: [Import]
+      summary: Confirm import after preview/mapping review
+      responses:
+        '200': { description: OK }
+  /exports:
+    post:
+      tags: [Export]
+      summary: Start export job (CSV/PDF, honours active filter)
+      responses:
+        '202': { description: Accepted }
+  /exports/{id}:
+    get:
+      tags: [Export]
+      summary: Export job status / download link (expiring)
+      responses:
+        '200': { description: OK }
+  /agents/connections:
+    get:
+      tags: [Agents]
+      summary: List agent connections
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Agents]
+      summary: Create agent connection
+      responses:
+        '201': { description: Created }
+  /agents/connections/{id}:
+    patch:
+      tags: [Agents]
+      summary: Update connection (permissions, limits, revoke)
+      responses:
+        '200': { description: OK }
+  /agents/approvals:
+    get:
+      tags: [Approvals]
+      summary: List pending approvals
+      responses:
+        '200': { description: OK }
+  /agents/approvals/{id}/approve:
+    post:
+      tags: [Approvals]
+      summary: Approve via trusted UI only (never via MCP)
+      responses:
+        '200': { description: OK }
+  /agents/approvals/{id}/reject:
+    post:
+      tags: [Approvals]
+      summary: Reject via trusted UI only
+      responses:
+        '200': { description: OK }
+  /agents/audit:
+    get:
+      tags: [Audit]
+      summary: Agent audit log (user-owned)
+      responses:
+        '200': { description: OK }
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: List users (admin role required)
+      responses:
+        '200': { description: OK }
+  /admin/users/{id}/suspend:
+    post:
+      tags: [Admin]
+      summary: Suspend user (reason + audit)
+      responses:
+        '200': { description: OK }
+  /admin/users/{id}/reactivate:
+    post:
+      tags: [Admin]
+      summary: Reactivate user
+      responses:
+        '200': { description: OK }
+  /admin/users/{id}/reset-password:
+    post:
+      tags: [Admin]
+      summary: Admin-assisted reset (temp credential + force change)
+      responses:
+        '200': { description: OK }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      required: [code, message, request_id]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        request_id: { type: string }
+        details: { type: object }
+    BudgetVsActual:
+      type: object
+      description: PRD §11.2 example shape
+      properties:
+        period:
+          type: object
+          properties:
+            start: { type: string, example: '2026-11-01' }
+            end: { type: string, example: '2026-11-30' }
+            timezone: { type: string, example: Asia/Jakarta }
+        currency: { type: string, example: IDR }
+        budget_minor: { type: integer, example: 5000000 }
+        actual_minor: { type: integer, example: 2800000 }
+        forecast_eop_minor: { type: integer, example: 6000000 }
+        remaining_minor: { type: integer, example: 2200000 }
+        projected_variance_minor: { type: integer, example: -1000000 }
+        forecast_method: { type: string, example: run_rate_v1 }
+        assumptions:
+          type: array
+          items: { type: string }
+security:
+  - bearerAuth: []
