@@ -1,0 +1,59 @@
+# Finance Tracker — build Android APK on GitHub Actions.
+# Triggers on push to main and manually (workflow_dispatch).
+# Secrets required (repo Settings > Secrets and variables > Actions):
+#   SUPABASE_ANON_KEY — Supabase publishable/anon key for
+#   https://supabase.adoetz52.my.id. Never commit the key itself.
+#   If the secret is not set, the build still succeeds; the app shows a
+#   configuration notice at runtime instead of crashing.
+# No secrets are printed in logs.
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Verify applicationId
+        run: |
+          grep -n "applicationId" android/app/build.gradle.kts
+          grep -q 'applicationId = "com.adoetzfinance.muse"' android/app/build.gradle.kts
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Flutter analyze
+        run: flutter analyze
+
+      - name: Build release APK
+        run: >
+          flutter build apk --release
+          --dart-define SUPABASE_URL=https://supabase.adoetz52.my.id
+          --dart-define SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
