@@ -6,7 +6,7 @@ Asia/Jakarta. Implementasi P0 dari PRD v1.0 (2026-11-07).
 
 ## P0 yang sudah dibangun
 
-- **Auth**: signup username (3–24 `[a-z0-9_]`) + email + password min 8,
+- **Auth**: signup username (3–24 `[a-z0-9_]`) + email + password min 12 (server GOTRUE minimum),
   tanpa konfirmasi email; login username-atau-email (resolusi username→email
   memerlukan layanan server — sampai tersedia, login memakai email);
   suspend check; logout; ubah kata sandi dengan kata sandi lama.

@@ -58,10 +58,16 @@ class _AuthScreenState extends State<AuthScreen> {
       if (mounted) context.go('/dashboard');
     } on SupabaseFailure catch (e) {
       setState(() => _error = e.message);
-    } on AuthException {
-      setState(() => _error = 'Email atau kata sandi salah.');
+    } on AuthException catch (e) {
+      // Signup: show the specific reason (e.g. password too short).
+      // Login: stay generic so nothing leaks about the account (PRD §5.1).
+      setState(() => _error = widget.isSignUp
+          ? mapSignupError(e).message
+          : 'Email atau kata sandi salah.');
     } catch (e) {
-      setState(() => _error = mapSupabaseError(e).message);
+      setState(() => _error = widget.isSignUp
+          ? mapSignupError(e).message
+          : mapSupabaseError(e).message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -146,8 +152,11 @@ class _AuthScreenState extends State<AuthScreen> {
                   ],
                   TextFormField(
                     controller: _passwordCtrl,
-                    decoration:
-                        const InputDecoration(labelText: 'Kata Sandi'),
+                    decoration: const InputDecoration(
+                      labelText: 'Kata Sandi',
+                      helperText:
+                          'Minimal 12 karakter, tidak boleh sama dengan username/email.',
+                    ),
                     obscureText: true,
                     validator: (v) => AuthService.validatePassword(
                       v ?? '',

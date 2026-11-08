@@ -1,4 +1,7 @@
+import 'package:financemuse/services/auth_service.dart';
 import 'package:financemuse/services/csv_service.dart';
+import 'package:financemuse/services/supabase_client.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:financemuse/services/mcp_policy.dart';
 import 'package:financemuse/utils/forecast.dart';
 import 'package:financemuse/utils/money_period.dart';
@@ -359,4 +362,74 @@ void main() {
       expect(csv, contains('35000'));
     });
   });
+  group('Password validation (min 12, equality only)', () {
+    test('8-11 chars rejected with min-12 message', () {
+      expect(AuthService.validatePassword('Abc12345'),
+          'Kata sandi minimal 12 karakter.');
+      expect(AuthService.validatePassword('Abc12345678'),
+          'Kata sandi minimal 12 karakter.');
+    });
+
+    test('12 chars accepted', () {
+      expect(AuthService.validatePassword('Abcdef123456'), isNull);
+    });
+
+    test('password equal to username rejected (case-insensitive)', () {
+      expect(AuthService.validatePassword('adoetz123456',
+              username: 'adoetz123456'),
+          'Kata sandi tidak boleh sama dengan username.');
+      expect(AuthService.validatePassword('ADOETZ123456',
+              username: 'adoetz123456'),
+          'Kata sandi tidak boleh sama dengan username.');
+    });
+
+    test('password merely containing username accepted', () {
+      expect(AuthService.validatePassword('Kuat-adoetz-2026',
+              username: 'adoetz'),
+          isNull);
+    });
+
+    test('password equal to email or its local-part rejected', () {
+      expect(AuthService.validatePassword('adoetzku1234@mail.com',
+              email: 'adoetzku1234@mail.com'),
+          'Kata sandi tidak boleh sama dengan email.');
+      expect(AuthService.validatePassword('adoetzku1234',
+              email: 'adoetzku1234@mail.com'),
+          'Kata sandi tidak boleh sama dengan email.');
+    });
+
+    test('password merely containing email local-part accepted', () {
+      expect(AuthService.validatePassword('Kuat-adoetzku1234-9',
+              email: 'adoetzku1234@mail.com'),
+          isNull);
+    });
+  });
+
+  group('Signup vs login error mapping', () {
+    test('signup short-password AuthException maps to min-12 message', () {
+      final err = mapSignupError(const AuthException(
+          'Password should be at least 12 characters.',
+          statusCode: '422',
+          code: 'weak_password'));
+      expect(err.message, 'Kata sandi minimal 12 karakter.');
+    });
+
+    test('signup already-registered maps to a specific message', () {
+      final err = mapSignupError(
+          const AuthException('User already registered', statusCode: '422'));
+      expect(err.message, 'Email sudah terdaftar. Silakan masuk.');
+    });
+
+    test('login AuthException stays generic (no enumeration)', () {
+      final err = mapSupabaseError(
+          const AuthException('Invalid login credentials', statusCode: '400'));
+      expect(err.message, 'Email atau kata sandi salah.');
+      final weak = mapSupabaseError(const AuthException(
+          'Password should be at least 12 characters.',
+          statusCode: '422',
+          code: 'weak_password'));
+      expect(weak.message, 'Email atau kata sandi salah.');
+    });
+  });
+
 }

@@ -143,7 +143,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     TextField(
                       controller: _newCtrl,
                       decoration: const InputDecoration(
-                          labelText: 'Kata sandi baru (min. 8 karakter)'),
+                          labelText: 'Kata sandi baru (min. 12 karakter)'),
                       obscureText: true,
                     ),
                     const SizedBox(height: AppSpacing.s12),

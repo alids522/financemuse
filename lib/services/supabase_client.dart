@@ -49,6 +49,57 @@ class SupabaseFailure implements Exception {
   String toString() => message;
 }
 
+/// Signup-specific error mapping: specific, actionable Indonesian
+/// messages for the user's OWN input (weak password, email already
+/// registered, username taken). This is safe on signup — it reveals
+/// nothing about any unrelated account — but it must NEVER be used for
+/// login, where every failure stays generic (PRD §5.1, no enumeration).
+SupabaseFailure mapSignupError(Object e) {
+  if (e is AuthException) {
+    final msg = e.message.toLowerCase();
+    final code = (e.code ?? '').toLowerCase();
+    if (code == 'weak_password' ||
+        msg.contains('at least 12') ||
+        msg.contains('password should be') ||
+        msg.contains('too short') ||
+        msg.contains('weak password')) {
+      return SupabaseFailure('Kata sandi minimal 12 karakter.', raw: e);
+    }
+    if (msg.contains('already registered') ||
+        msg.contains('already exists') ||
+        msg.contains('user already')) {
+      return SupabaseFailure('Email sudah terdaftar. Silakan masuk.', raw: e);
+    }
+    if (msg.contains('invalid email') || msg.contains('email address')) {
+      return SupabaseFailure('Format email tidak valid.', raw: e);
+    }
+    if (msg.contains('username already') ||
+        msg.contains('already taken') ||
+        msg.contains('duplicate key') ||
+        msg.contains('23505')) {
+      return SupabaseFailure(
+          'Username sudah dipakai. Pilih username lain.',
+          raw: e);
+    }
+    if (msg.contains('invitation only')) {
+      return SupabaseFailure('Pendaftaran memerlukan undangan.', raw: e);
+    }
+    if (msg.contains('invitation unavailable')) {
+      return SupabaseFailure('Undangan tidak tersedia.', raw: e);
+    }
+    if (msg.contains('password')) {
+      return SupabaseFailure(
+          'Kata sandi tidak memenuhi syarat. Gunakan minimal 12 karakter.',
+          raw: e);
+    }
+    return SupabaseFailure('Pendaftaran gagal. Coba lagi.', raw: e);
+  }
+  if (e is PostgrestException) {
+    return SupabaseFailure('Pendaftaran gagal. Coba lagi.', raw: e);
+  }
+  return SupabaseFailure('Pendaftaran gagal. Coba lagi.', raw: e);
+}
+
 /// Map a Supabase/PostgREST error to a user-facing failure. Generic messages
 /// only — never leak whether an account exists (PRD §5.1).
 SupabaseFailure mapSupabaseError(Object e) {

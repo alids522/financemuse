@@ -3,7 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_client.dart';
 
 /// Auth flows (PRD §5.1).
-/// - Signup: username 3–24 [a-z0-9_], email, password min 8 + confirm.
+/// - Signup: username 3–24 [a-z0-9_], email, password min 12 + confirm.
+///   Server (GOTRUE_PASSWORD_MIN_LENGTH) enforces 12 instance-wide.
 ///   No email confirmation; session starts immediately; a `profiles` row is
 ///   created with username_normalized = lowercase.
 /// - Login: username-or-email. Bare usernames are resolved to an email
@@ -27,14 +28,24 @@ class AuthService {
   }
 
   static String? validatePassword(String value, {String? username, String? email}) {
-    if (value.length < 8) return 'Kata sandi minimal 8 karakter.';
-    if (username != null && username.isNotEmpty &&
-        value.toLowerCase().contains(username.toLowerCase())) {
+    // Server minimum is 12 (GOTRUE_PASSWORD_MIN_LENGTH instance-wide);
+    // the old min-8 client check let 8-11 char passwords through, only for
+    // Supabase Auth to reject them with a hidden generic error.
+    if (value.length < 12) return 'Kata sandi minimal 12 karakter.';
+    // PRD §5.1: password must not EQUAL username/email, not merely
+    // contain it. The old substring check rejected good passwords such
+    // as 'Kuat-adoetz-2026' for username 'adoetz'.
+    final pw = value.trim().toLowerCase();
+    if (username != null && username.trim().isNotEmpty &&
+        pw == username.trim().toLowerCase()) {
       return 'Kata sandi tidak boleh sama dengan username.';
     }
-    if (email != null && email.isNotEmpty &&
-        value.toLowerCase().contains(email.split('@').first.toLowerCase())) {
-      return 'Kata sandi tidak boleh sama dengan email.';
+    if (email != null && email.trim().isNotEmpty) {
+      final mail = email.trim().toLowerCase();
+      final local = mail.split('@').first;
+      if (pw == mail || (local.isNotEmpty && pw == local)) {
+        return 'Kata sandi tidak boleh sama dengan email.';
+      }
     }
     return null;
   }
@@ -76,7 +87,9 @@ class AuthService {
 
     } catch (e) {
       if (e is SupabaseFailure) rethrow;
-      throw mapSupabaseError(e);
+      // Signup errors are specific and actionable (see mapSignupError);
+      // only login stays generic per PRD §5.1.
+      throw mapSignupError(e);
     }
   }
 
@@ -147,6 +160,8 @@ class AuthService {
     required String oldPassword,
     required String newPassword,
   }) async {
+    final passwordError = validatePassword(newPassword);
+    if (passwordError != null) throw SupabaseFailure(passwordError);
     try {
       await _client.auth.signInWithPassword(
         email: email,
@@ -155,6 +170,15 @@ class AuthService {
       await _client.auth.updateUser(UserAttributes(password: newPassword));
     } catch (e) {
       if (e is SupabaseFailure) rethrow;
+      if (e is AuthException) {
+        final msg = e.message.toLowerCase();
+        if ((e.code ?? '').toLowerCase() == 'weak_password' ||
+            msg.contains('at least 12') ||
+            msg.contains('too short') ||
+            msg.contains('password should be')) {
+          throw SupabaseFailure('Kata sandi minimal 12 karakter.', raw: e);
+        }
+      }
       throw SupabaseFailure('Kata sandi lama salah atau perubahan gagal.');
     }
   }
