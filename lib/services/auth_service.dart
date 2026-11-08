@@ -52,23 +52,28 @@ class AuthService {
       final res = await _client.auth.signUp(
         email: email.trim(),
         password: password,
+        data: {
+          'app': 'financemuse',
+          'username': normalized,
+          'display_name': normalized,
+        },
       );
       final user = res.user;
       if (user == null) {
         throw SupabaseFailure('Pendaftaran gagal. Coba lagi.');
       }
-      // Create the profile row (PRD §5.1, §10 profiles). `username` is
-      // NOT NULL and must equal username_normalized (lowercase).
-      await _client.table('profiles').insert({
-        'user_id': user.id,
-        'username': normalized,
-        'username_normalized': normalized,
-        'display_name': normalized,
-        'base_currency': 'IDR',
-        'timezone': 'Asia/Jakarta',
-        'theme': 'system',
-        'status': 'active',
-      });
+      // The profile row is created by the adoetz_signup trigger (scoped
+      // financemuse branch) -- the trigger is the single writer. Verify it
+      // exists; if it does not, signup did not complete cleanly.
+      final profile = await _client
+          .table('profiles')
+          .select('user_id')
+          .eq('user_id', user.id)
+          .limit(1);
+      if (profile.isEmpty) {
+        throw SupabaseFailure('Pendaftaran gagal. Coba lagi.');
+      }
+
     } catch (e) {
       if (e is SupabaseFailure) rethrow;
       throw mapSupabaseError(e);
