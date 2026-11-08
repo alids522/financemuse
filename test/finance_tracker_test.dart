@@ -420,6 +420,37 @@ void main() {
       expect(err.message, 'Email sudah terdaftar. Silakan masuk.');
     });
 
+    test('signup network failure maps to connectivity message', () {
+      final err = mapSignupError(
+          Exception('Failed host lookup: supabase.adoetz52.my.id'));
+      expect(
+          err.message,
+          'Tidak dapat terhubung ke server. Periksa koneksi internet, '
+          'lalu coba lagi.');
+    });
+
+    test('signup database error maps to server message', () {
+      final err = mapSignupError(const AuthException(
+          'Database error saving new user', statusCode: '500'));
+      expect(
+          err.message,
+          'Pendaftaran gagal di server. Coba lagi; jika berlanjut, '
+          'hubungi admin.');
+    });
+
+    test('signup rate limit maps to wait message', () {
+      final err = mapSignupError(
+          const AuthException('Email rate limit exceeded',
+              statusCode: '429'));
+      expect(err.message,
+          'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.');
+    });
+
+    test('build marker defaults are non-empty', () {
+      expect(SupabaseConfig.appVersion.isNotEmpty, isTrue);
+      expect(SupabaseConfig.appCommit.isNotEmpty, isTrue);
+    });
+
     test('login AuthException stays generic (no enumeration)', () {
       final err = mapSupabaseError(
           const AuthException('Invalid login credentials', statusCode: '400'));

@@ -159,6 +159,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: AppSpacing.s16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.s16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Tentang aplikasi',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: AppSpacing.s8),
+                    Text('Versi: ${SupabaseConfig.appVersion}'),
+                    Text('Build: ${SupabaseConfig.appCommit}'),
+                    const Text('Server: https://supabase.adoetz52.my.id'),
+                    Text(
+                      'Kunci server: ${SupabaseConfig.isConfigured ? 'ada' : 'tidak ada'}',
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),

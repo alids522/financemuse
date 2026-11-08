@@ -23,6 +23,17 @@ class SupabaseConfig {
 
   static bool get isConfigured => anonKey.isNotEmpty;
 
+  /// Build marker, passed by CI as --dart-define APP_COMMIT=`<short sha>`.
+  /// Shown in Settings and on the auth screen so a bug report can be
+  /// tied to the exact APK build installed on the phone.
+  static const String appCommit = String.fromEnvironment(
+    'APP_COMMIT',
+    defaultValue: 'dev',
+  );
+
+  /// Display version (mirrors pubspec.yaml).
+  static const String appVersion = '1.0.0+6';
+
   static Future<void> init() async {
     // `anonKey` param is deprecated in supabase_flutter 2.18 in favour of
     // `publishableKey`; the --dart-define name stays SUPABASE_ANON_KEY.
@@ -54,7 +65,35 @@ class SupabaseFailure implements Exception {
 /// registered, username taken). This is safe on signup — it reveals
 /// nothing about any unrelated account — but it must NEVER be used for
 /// login, where every failure stays generic (PRD §5.1, no enumeration).
+/// True when the failure is a transport problem (offline, DNS, timeout),
+/// i.e. the request never reached the server. These must never surface as
+/// a bare 'Pendaftaran gagal' - the user needs to know it is connectivity.
+bool _isNetworkError(Object e) {
+  final name = e.runtimeType.toString().toLowerCase();
+  final msg = e.toString().toLowerCase();
+  if (name.contains('socketexception') ||
+      name.contains('clientexception') ||
+      name.contains('timeoutexception') ||
+      name.contains('httpexception')) {
+    return true;
+  }
+  return msg.contains('failed host lookup') ||
+      msg.contains('connection refused') ||
+      msg.contains('network is unreachable') ||
+      msg.contains('connection reset') ||
+      msg.contains('timed out') ||
+      msg.contains('no internet') ||
+      msg.contains('unable to resolve host');
+}
+
 SupabaseFailure mapSignupError(Object e) {
+  if (_isNetworkError(e)) {
+    return SupabaseFailure(
+      'Tidak dapat terhubung ke server. Periksa koneksi internet, '
+      'lalu coba lagi.',
+      raw: e,
+    );
+  }
   if (e is AuthException) {
     final msg = e.message.toLowerCase();
     final code = (e.code ?? '').toLowerCase();
@@ -90,6 +129,23 @@ SupabaseFailure mapSignupError(Object e) {
     if (msg.contains('password')) {
       return SupabaseFailure(
           'Kata sandi tidak memenuhi syarat. Gunakan minimal 12 karakter.',
+          raw: e);
+    }
+    if (msg.contains('database error saving new user') ||
+        msg.contains('database error')) {
+      return SupabaseFailure(
+          'Pendaftaran gagal di server. Coba lagi; jika berlanjut, '
+          'hubungi admin.',
+          raw: e);
+    }
+    if (msg.contains('signup disabled') ||
+        msg.contains('signups not allowed')) {
+      return SupabaseFailure(
+          'Pendaftaran sedang dimatikan di server.', raw: e);
+    }
+    if (msg.contains('rate limit') || msg.contains('too many requests')) {
+      return SupabaseFailure(
+          'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.',
           raw: e);
     }
     return SupabaseFailure('Pendaftaran gagal. Coba lagi.', raw: e);

@@ -194,6 +194,14 @@ class _AuthScreenState extends State<AuthScreen> {
                         ? 'Sudah punya akun? Masuk'
                         : 'Belum punya akun? Daftar'),
                   ),
+                  const SizedBox(height: AppSpacing.s16),
+                  Text(
+                    'Finance Tracker ${SupabaseConfig.appVersion} • build '
+                    '${SupabaseConfig.appCommit} • kunci server: '
+                    '${SupabaseConfig.isConfigured ? 'ada' : 'tidak ada'}',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   if (!isSignUp) ...[
                     const SizedBox(height: AppSpacing.s8),
                     Text(

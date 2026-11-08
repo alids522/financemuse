@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_client.dart';
@@ -59,6 +61,14 @@ class AuthService {
     required String password,
   }) async {
     final normalized = username.trim().toLowerCase();
+    // An APK built without the anon key can never reach Auth. Say so
+    // plainly instead of letting the call fail as 'Pendaftaran gagal'.
+    if (!SupabaseConfig.isConfigured) {
+      throw SupabaseFailure(
+        'APK ini tidak memiliki kunci server. Install APK terbaru '
+        '(build terbaru) lalu coba lagi.',
+      );
+    }
     try {
       final res = await _client.auth.signUp(
         email: email.trim(),
@@ -69,22 +79,37 @@ class AuthService {
           'display_name': normalized,
         },
       );
-      final user = res.user;
+      // With email auto-confirm the session is returned immediately.
+      final user = res.user ?? res.session?.user;
       if (user == null) {
         throw SupabaseFailure('Pendaftaran gagal. Coba lagi.');
       }
       // The profile row is created by the adoetz_signup trigger (scoped
-      // financemuse branch) -- the trigger is the single writer. Verify it
-      // exists; if it does not, signup did not complete cleanly.
-      final profile = await _client
-          .table('profiles')
-          .select('user_id')
-          .eq('user_id', user.id)
-          .limit(1);
-      if (profile.isEmpty) {
-        throw SupabaseFailure('Pendaftaran gagal. Coba lagi.');
+      // financemuse branch) -- the trigger is the single writer. Verify
+      // it exists, with retries for trigger/PostgREST timing.
+      //
+      // CRITICAL: once the account + session exist, signup SUCCEEDED.
+      // A slow/unreadable profile row must NEVER be reported as
+      // 'Pendaftaran gagal' -- the account exists, so a retry would only
+      // hit 'Email sudah terdaftar' and the user is stuck. The dashboard
+      // loads the profile lazily instead.
+      var found = false;
+      for (var attempt = 0; attempt < 3 && !found; attempt++) {
+        if (attempt > 0) {
+          await Future.delayed(const Duration(milliseconds: 700));
+        }
+        try {
+          final profile = await _client
+              .table('profiles')
+              .select('user_id')
+              .eq('user_id', user.id)
+              .limit(1);
+          found = profile.isNotEmpty;
+        } catch (_) {
+          // Transient PostgREST/JWT error: retry, do not fail signup.
+        }
       }
-
+      // found == false + valid session: proceed anyway (see above).
     } catch (e) {
       if (e is SupabaseFailure) rethrow;
       // Signup errors are specific and actionable (see mapSignupError);

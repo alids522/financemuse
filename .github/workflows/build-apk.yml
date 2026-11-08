@@ -49,6 +49,7 @@ jobs:
           flutter build apk --release
           --dart-define SUPABASE_URL=https://supabase.adoetz52.my.id
           --dart-define SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          --dart-define APP_COMMIT=${GITHUB_SHA:0:8}
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
